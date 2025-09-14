@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Control System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        .font-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .track {
+            position: relative;
+            background-color: #000;
+            height: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .track::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-image: repeating-linear-gradient(90deg, #444, #444 10px, transparent 10px, transparent 20px);
+            transform: translateY(-50%);
+        }
+        .train-light {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            transition: left 1s linear, background-color 0.5s ease;
+            box-shadow: 0 0 15px 5px var(--glow-color);
+            z-index: 10;
+        }
+        .status-normal { background-color: #00AFFF; --glow-color: #00AFFF80; } /* Blue */
+        .status-stopped { background-color: #FF4747; --glow-color: #FF474780; } /* Red */
+        .status-delayed { background-color: #FFD700; --glow-color: #FFD70080; } /* Yellow */
+        .switch-lever {
+            position: absolute;
+            width: 8px;
+            height: 40px;
+            background-color: #a0a0a0;
+            border: 2px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+            transform-origin: bottom center;
+            transition: transform 0.3s ease;
+            z-index: 20;
+        }
+        .switch-lever.straight { transform: rotate(-20deg); }
+        .switch-lever.divert { transform: rotate(20deg); }
+        .crossover {
+            position: absolute;
+            background-color: #000;
+            height: 10px;
+            transform-origin: left center;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            z-index: 5;
+            border-radius: 2px;
+        }
+        .crossover-active {
+             background-color: #00AFFF;
+        }
+        .station-label {
+            position: absolute;
+            color: #888;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .info-card {
+            background-color: rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- Header Information Bar -->
+    <header class="w-full p-4 flex justify-between items-center info-card z-30">
+        <h1 class="text-2xl font-bold text-white">Dadar Control</h1>
+        <div class="flex items-center space-x-6 text-lg">
+            <div>
+                <span class="font-bold">Next Arrival:</span>
+                <span id="next-train-info" class="font-mono">T12951 at 08:35</span>
+            </div>
+            <div id="weather-info">
+                 <span class="font-bold">Temp:</span>
+                 <span id="temperature" class="font-mono">--°C</span>
+            </div>
+            <div>
+                <span class="font-bold">Time:</span>
+                <span id="real-time-clock" class="font-mono">00:00:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content: Tracks and Trains -->
+    <main class="flex-grow flex items-center justify-center p-8">
+        <div id="railway-network" class="w-full max-w-7xl relative space-y-16">
+            <!-- Labels -->
+            <div class="station-label" style="left: 10%; top: -30px;">Borivali Side</div>
+            <div class="station-label" style="left: 48%; top: -30px;">Dadar Station</div>
+            <div class="station-label" style="right: 10%; top: -30px;">Churchgate Side</div>
+
+            <!-- Track 1: Fast Up -->
+            <div class="relative">
+                <div id="track-fu" class="track w-full"></div>
+                <div class="absolute -left-20 top-1/2 -translate-y-1/2 text-gray-400 text-sm">Fast Up</div>
+            </div>
+            
+            <!-- Track 2: Fast Down -->
+            <div class="relative">
+                 <div id="track-fd" class="track w-full"></div>
+                 <div class="absolute -left-20 top-1/2 -translate-y-1/2 text-gray-400 text-sm">Fast Down</div>
+            </div>
+
+            <!-- Track 3: Slow Up -->
+            <div class="relative">
+                 <div id="track-su" class="track w-full"></div>
+                 <div class="absolute -left-20 top-1/2 -translate-y-1/2 text-gray-400 text-sm">Slow Up</div>
+            </div>
+
+            <!-- Track 4: Slow Down -->
+            <div class="relative">
+                 <div id="track-sd" class="track w-full"></div>
+                 <div class="absolute -left-20 top-1/2 -translate-y-1/2 text-gray-400 text-sm">Slow Down</div>
+            </div>
+
+            <!-- Crossover Visualization -->
+            <div id="crossover-viz" class="absolute h-full w-full top-0 left-0">
+                <!-- Placeholder for dynamic crossover lines -->
+            </div>
+             
+            <!-- Switch Levers -->
+            <div id="lever-c1" class="switch-lever straight" style="left: 40%; top: 150px;" title="Manual Override: Switch C1"></div>
+        </div>
+    </main>
+
+    <!-- Footer Information Panels -->
+    <footer class="w-full p-4 grid grid-cols-4 gap-4 info-card z-30">
+        <!-- Train Info Panels will be dynamically generated here -->
+        <div id="train-info-panels"></div>
+        <div id="log-panel" class="col-span-2 p-4 bg-black/30 rounded-lg">
+             <h3 class="font-bold text-gray-400 mb-2">System Log</h3>
+             <div id="log-messages" class="h-24 overflow-y-auto text-sm font-mono space-y-1">
+                <!-- Log messages will appear here -->
+             </div>
+        </div>
+    </footer>
+
+
+<script>
+    // --- CONFIGURATION & INITIAL STATE ---
+    const SIMULATION_SPEED = 1; // 1 = real-time, >1 is faster
+    const TICK_INTERVAL = 1000; // ms per simulation tick
+
+    let simulationState = {
+        time: new Date(),
+        switches: {
+            c1: { state: 'straight', controlledBy: 'auto' } // state: 'straight' | 'divert'
+        },
+        trains: [
+            { id: 'T1', name: 'Rajdhani Exp', priority: 1, status: 'normal', speed: 100, currentTrack: 'track-fu', position: 5, path: ['track-fu'] },
+            { id: 'T2', name: 'Local 934', priority: 2, status: 'normal', speed: 60, currentTrack: 'track-sd', position: 25, path: ['track-sd', 'crossover-c1', 'track-fd'] },
+            { id: 'T3', name: 'Flying Ranee', priority: 1, status: 'normal', speed: 90, currentTrack: 'track-fd', position: 80, path: ['track-fd'] },
+            { id: 'T4', name: 'Goods WAG9', priority: 3, status: 'delayed', speed: 45, currentTrack: 'track-su', position: 95, path: ['track-su'] },
+        ]
+    };
+
+    // --- DOM ELEMENTS ---
+    const clockElement = document.getElementById('real-time-clock');
+    const tempElement = document.getElementById('temperature');
+    const networkElement = document.getElementById('railway-network');
+    const trainInfoPanel = document.getElementById('train-info-panels');
+    const logMessages = document.getElementById('log-messages');
+    const leverC1 = document.getElementById('lever-c1');
+    const crossoverViz = document.getElementById('crossover-viz');
+
+    // --- CORE SIMULATION LOGIC ---
+
+    function log(message, type = 'INFO') {
+        const time = new Date().toLocaleTimeString();
+        const color = type === 'WARN' ? 'text-yellow-400' : type === 'CRITICAL' ? 'text-red-500' : 'text-gray-300';
+        logMessages.innerHTML = `<div class="${color}"><span class="text-gray-500">${time}</span> [${type}] ${message}</div>` + logMessages.innerHTML;
+        // Keep log from getting too long
+        if (logMessages.children.length > 20) {
+            logMessages.removeChild(logMessages.lastChild);
+        }
+    }
+
+    function checkConflicts() {
+        // This is a simplified conflict detection for the PoC
+        const localTrain = simulationState.trains.find(t => t.id === 'T2');
+        const expressTrain = simulationState.trains.find(t => t.id === 'T1');
+
+        // Conflict Zone: Crossover entry (approx 45%) vs conflicting track (40% to 60%)
+        const localAtCrossoverEntry = localTrain.position > 42 && localTrain.position < 48;
+        const expressInConflictZone = expressTrain.position > 38 && expressTrain.position < 62;
+
+        if (localAtCrossoverEntry && expressInConflictZone) {
+            log('Conflict Detected at Crossover C1!', 'CRITICAL');
+            if (expressTrain.priority < localTrain.priority) {
+                 log(`Rajdhani (P${expressTrain.priority}) has priority. Holding Local (P${localTrain.priority}).`);
+                 localTrain.status = 'stopped';
+                 localTrain.speed = 0;
+            } else {
+                 log(`Local (P${localTrain.priority}) has priority. Holding Rajdhani (P${expressTrain.priority}).`);
+                 expressTrain.status = 'stopped';
+                 expressTrain.speed = 0;
+            }
+        } else if (localTrain.status === 'stopped' && !expressInConflictZone) {
+            // If the express train has cleared the zone, let the local train proceed.
+            log('Conflict zone clear. Local 934 resuming.', 'INFO');
+            localTrain.status = 'normal';
+            localTrain.speed = 60; // Resume speed
+        }
+    }
+
+    function updateTrainPositions() {
+        simulationState.trains.forEach(train => {
+            if (train.status !== 'stopped') {
+                const distance = (train.speed * SIMULATION_SPEED) / 360; // Simplified km/h to % per tick
+                train.position += distance;
+                if (train.position > 100) train.position = 0; // Loop train for demo
+            }
+        });
+    }
+
+    function simulationTick() {
+        updateTrainPositions();
+        checkConflicts();
+        render();
+    }
+
+    // --- RENDERING ---
+    function render() {
+        // Clear previous state
+        networkElement.querySelectorAll('.train-light').forEach(el => el.remove());
+        trainInfoPanel.innerHTML = '';
+        crossoverViz.innerHTML = '';
+        
+        // Render Trains & Info Panels
+        simulationState.trains.forEach(train => {
+            // Render train light on track
+            const trainEl = document.createElement('div');
+            trainEl.className = `train-light status-${train.status}`;
+            trainEl.id = `train-${train.id}`;
+            trainEl.style.left = `${train.position}%`;
+            document.getElementById(train.currentTrack).appendChild(trainEl);
+
+            // Render info panel
+            const panel = document.createElement('div');
+            const statusColor = train.status === 'normal' ? 'text-blue-400' : train.status === 'stopped' ? 'text-red-500' : 'text-yellow-400';
+            panel.className = 'col-span-1 space-y-1';
+            panel.innerHTML = `
+                <div class="flex justify-between items-baseline">
+                    <h3 class="font-bold text-white">${train.name} (${train.id})</h3>
+                    <span class="text-xs text-gray-400">P${train.priority}</span>
+                </div>
+                <div class="text-2xl font-mono ${statusColor}">${train.speed.toFixed(0)} <span class="text-sm">km/h</span></div>
+                <div class="text-sm text-gray-400 uppercase font-mono ${statusColor}">${train.status}</div>
+            `;
+            trainInfoPanel.appendChild(panel);
+        });
+
+        // Render Switch
+        leverC1.className = `switch-lever ${simulationState.switches.c1.state}`;
+        
+        // Render Crossover visualization
+        const localTrain = simulationState.trains.find(t => t.id === 'T2');
+        if (localTrain.position > 45 && localTrain.position < 55) { // When train is on crossover
+            const sdTrack = document.getElementById('track-sd').getBoundingClientRect();
+            const fdTrack = document.getElementById('track-fd').getBoundingClientRect();
+            const networkRect = networkElement.getBoundingClientRect();
+
+            const y1 = sdTrack.top - networkRect.top + sdTrack.height / 2;
+            const y2 = fdTrack.top - networkRect.top + fdTrack.height / 2;
+            const x1 = networkRect.width * 0.45;
+            const x2 = networkRect.width * 0.55;
+
+            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+            const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+
+            crossoverViz.innerHTML = `<div class="crossover crossover-active" style="width:${length}px; top:${y1}px; left:${x1}px; transform: rotate(${angle}deg);"></div>`;
+        }
+    }
+
+    // --- UTILITIES & EVENT LISTENERS ---
+    function updateClock() {
+        const now = new Date();
+        clockElement.textContent = now.toLocaleTimeString();
+    }
+
+    async function fetchWeather() {
+        // Using New Delhi coordinates
+        const lat = 28.61;
+        const lon = 77.23;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            const temp = data.current_weather.temperature;
+            tempElement.textContent = `${temp.toFixed(1)}°C`;
+        } catch (error) {
+            console.error("Failed to fetch weather:", error);
+            tempElement.textContent = "N/A";
+        }
+    }
+    
+    leverC1.addEventListener('click', () => {
+        simulationState.switches.c1.state = simulationState.switches.c1.state === 'straight' ? 'divert' : 'straight';
+        simulationState.switches.c1.controlledBy = 'manual';
+        log(`Switch C1 manually set to ${simulationState.switches.c1.state.toUpperCase()}`, 'WARN');
+        render(); // immediate visual feedback
+    });
+
+    // --- INITIALIZATION ---
+    window.onload = () => {
+        log('System Initialized. Awaiting simulation start.');
+        updateClock();
+        fetchWeather();
+        setInterval(updateClock, 1000);
+        setInterval(simulationTick, TICK_INTERVAL);
+        log('Simulation started.');
+        render(); // Initial render
+    };
+
+</script>
+</body>
+</html>
+
